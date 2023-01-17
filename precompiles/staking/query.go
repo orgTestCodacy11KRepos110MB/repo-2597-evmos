@@ -22,6 +22,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/core/vm"
 
 	"github.com/evmos/ethermint/x/evm/statedb"
 )
@@ -38,7 +39,51 @@ var (
 	ValidatorMethod abi.Method
 )
 
-func (sp *StakingPrecompile) Delegation(ctx sdk.Context, argsBz []byte, stateDB statedb.ExtStateDB) ([]byte, error) {
+func init() {
+	addressType, _ := abi.NewType("address", "", nil)
+	stringType, _ := abi.NewType("string", "", nil)
+	uint256Type, _ := abi.NewType("uint256", "", nil)
+
+	DelegationMethod = abi.NewMethod(
+		"delegation", // name
+		"delegation", // raw name
+		abi.Function,
+		"",
+		false,
+		false,
+		abi.Arguments{
+			{
+				Name: "delegatorAddress",
+				Type: addressType,
+			},
+			{
+				Name: "validatorAddress",
+				Type: stringType,
+			},
+		},
+		abi.Arguments{
+			{
+				Name: "shares",
+				Type: uint256Type,
+			},
+			{
+				Name: "denom",
+				Type: stringType,
+			},
+			{
+				Name: "amount",
+				Type: uint256Type,
+			},
+		},
+	)
+}
+
+func (sp *StakingPrecompile) Delegation(ctx sdk.Context,
+	contract *vm.Contract,
+	argsBz []byte,
+	stateDB *statedb.StateDB,
+	readOnly bool,
+) ([]byte, error) {
 	args, err := DelegationMethod.Inputs.Unpack(argsBz)
 	if err != nil {
 		return nil, errors.New("fail to unpack input arguments")
@@ -56,7 +101,11 @@ func (sp *StakingPrecompile) Delegation(ctx sdk.Context, argsBz []byte, stateDB 
 		return nil, err
 	}
 
-	bz, err := DelegationMethod.Outputs.Pack(res)
+	shares := res.DelegationResponse.Delegation.Shares.BigInt()
+	denom := res.DelegationResponse.Balance.Denom
+	amount := res.DelegationResponse.Balance.Amount.BigInt()
+
+	bz, err := DelegationMethod.Outputs.Pack(shares, denom, amount)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +113,12 @@ func (sp *StakingPrecompile) Delegation(ctx sdk.Context, argsBz []byte, stateDB 
 	return bz, nil
 }
 
-func (sp *StakingPrecompile) UnbondingDelegation(ctx sdk.Context, argsBz []byte, stateDB statedb.ExtStateDB) ([]byte, error) {
+func (sp *StakingPrecompile) UnbondingDelegation(ctx sdk.Context,
+	contract *vm.Contract,
+	argsBz []byte,
+	stateDB *statedb.StateDB,
+	readOnly bool,
+) ([]byte, error) {
 	args, err := UnbondingDelegationMethod.Inputs.Unpack(argsBz)
 	if err != nil {
 		return nil, errors.New("fail to unpack input arguments")
@@ -90,7 +144,12 @@ func (sp *StakingPrecompile) UnbondingDelegation(ctx sdk.Context, argsBz []byte,
 	return bz, nil
 }
 
-func (sp *StakingPrecompile) Validator(ctx sdk.Context, argsBz []byte, stateDB statedb.ExtStateDB) ([]byte, error) {
+func (sp *StakingPrecompile) Validator(ctx sdk.Context,
+	contract *vm.Contract,
+	argsBz []byte,
+	stateDB *statedb.StateDB,
+	readOnly bool,
+) ([]byte, error) {
 	args, err := ValidatorMethod.Inputs.Unpack(argsBz)
 	if err != nil {
 		return nil, errors.New("fail to unpack input arguments")
@@ -107,6 +166,9 @@ func (sp *StakingPrecompile) Validator(ctx sdk.Context, argsBz []byte, stateDB s
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: define all args for response
+	// res.Validator.OperatorAddress
 
 	bz, err := ValidatorMethod.Outputs.Pack(res)
 	if err != nil {

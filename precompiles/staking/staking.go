@@ -19,139 +19,17 @@ package staking
 import (
 	"errors"
 	"fmt"
-	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 
 	"github.com/evmos/ethermint/x/evm/statedb"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 )
 
-var _ vm.PrecompiledContract = (*StakingPrecompile)(nil)
-
-func init() {
-	addressType, _ := abi.NewType("address", "", nil)
-	stringType, _ := abi.NewType("string", "", nil)
-	uint256Type, _ := abi.NewType("uint256", "", nil)
-	uint64Type, _ := abi.NewType("uint64", "", nil)
-
-	DelegateMethod = abi.NewMethod(
-		"delegate", // name
-		"delegate", // raw name
-		abi.Function,
-		"",
-		false,
-		false,
-		abi.Arguments{
-			{
-				Name: "delegatorAddress",
-				Type: addressType,
-			},
-			{
-				Name: "validatorAddress",
-				Type: stringType,
-			},
-			{
-				Name: "amount",
-				Type: uint256Type,
-			},
-		},
-		abi.Arguments{},
-	)
-
-	UndelegateMethod = abi.NewMethod(
-		"undelegate", // name
-		"undelegate", // raw name
-		abi.Function,
-		"",
-		false,
-		false,
-		abi.Arguments{
-			{
-				Name: "delegatorAddress",
-				Type: addressType,
-			},
-			{
-				Name: "validatorAddress",
-				Type: stringType,
-			},
-			{
-				Name: "amount",
-				Type: uint256Type,
-			},
-		},
-		abi.Arguments{
-			{
-				Name: "completionTime",
-				Type: uint64Type,
-			},
-		},
-	)
-
-	RedelegateMethod = abi.NewMethod(
-		"redelegate", // name
-		"redelegate", // raw name
-		abi.Function,
-		"",
-		false,
-		false,
-		abi.Arguments{
-			{
-				Name: "delegatorAddress",
-				Type: addressType,
-			},
-			{
-				Name: "validatorSrcAddress",
-				Type: stringType,
-			},
-			{
-				Name: "validatorDstAddress",
-				Type: stringType,
-			},
-			{
-				Name: "amount",
-				Type: uint256Type,
-			},
-		},
-		abi.Arguments{
-			{
-				Name: "completionTime",
-				Type: uint64Type,
-			},
-		},
-	)
-
-	CancelUnbondingDelegationMethod = abi.NewMethod(
-		"cancelUnbondingDelegation", // name
-		"cancelUnbondingDelegation", // raw name
-		abi.Function,
-		"",
-		false,
-		false,
-		abi.Arguments{
-			{
-				Name: "delegatorAddress",
-				Type: addressType,
-			},
-			{
-				Name: "validatorSrcAddress",
-				Type: stringType,
-			},
-			{
-				Name: "validatorDstAddress",
-				Type: stringType,
-			},
-			{
-				Name: "amount",
-				Type: uint256Type,
-			},
-		},
-		abi.Arguments{},
-	)
-}
+var _ vm.PrecompiledContract = &StakingPrecompile{}
 
 type StakingPrecompile struct {
 	stakingKeeper stakingkeeper.Keeper
@@ -165,23 +43,31 @@ func NewStakingPrecompile(
 	}
 }
 
+// Address defines the address of the staking compile contract.
+// address: 0x0000000000000000000000000000000000000100
+func (StakingPrecompile) Address() common.Address {
+	return common.BytesToAddress([]byte{100})
+}
+
+// IsStateful returns true since the precompile contract has access to the
+// staking state.
+func (StakingPrecompile) IsStateful() bool {
+	return true
+}
+
 // RequiredGas calculates the contract gas use
 func (sp *StakingPrecompile) RequiredGas(input []byte) uint64 {
-	// TODO: estimate required gas since this is stateful
 	return 0
 }
 
-func (sp *StakingPrecompile) Run(_ []byte) ([]byte, error) {
-	return nil, errors.New("should run with RunStateful")
-}
-
-func (sp *StakingPrecompile) RunStateful(evm vm.EVM, caller common.Address, input []byte, value *big.Int) ([]byte, error) {
-	stateDB, ok := evm.StateDB.(statedb.ExtStateDB)
+func (sp *StakingPrecompile) Run(evm *vm.EVM, contract *vm.Contract, input []byte, readOnly bool) ([]byte, error) {
+	stateDB, ok := evm.StateDB.(*statedb.StateDB)
 	if !ok {
 		return nil, errors.New("not run in ethermint")
 	}
 
-	ctx := stateDB.Context()
+	// ctx := stateDB.GetContext()
+	ctx := sdk.Context{}
 
 	methodID := string(input[:4])
 	argsBz := input[4:]
@@ -189,22 +75,23 @@ func (sp *StakingPrecompile) RunStateful(evm vm.EVM, caller common.Address, inpu
 	switch methodID {
 	// Staking transactions
 	case string(DelegateMethod.ID):
-		return sp.Delegate(ctx, argsBz, stateDB)
+		return sp.Delegate(ctx, contract, argsBz, stateDB, readOnly)
 	case string(UndelegateMethod.ID):
-		return sp.Undelegate(ctx, argsBz, stateDB)
+		return sp.Undelegate(ctx, contract, argsBz, stateDB, readOnly)
 	case string(RedelegateMethod.ID):
-		return sp.Redelegate(ctx, argsBz, stateDB)
+		return sp.Redelegate(ctx, contract, argsBz, stateDB, readOnly)
 	case string(CancelUnbondingDelegationMethod.ID):
-		return sp.CancelUnbondingDelegation(ctx, argsBz, stateDB)
+		return sp.CancelUnbondingDelegation(ctx, contract, argsBz, stateDB, readOnly)
 		// Staking queries
 	case string(DelegationMethod.ID):
-		return sp.Delegation(ctx, argsBz, stateDB)
+		return sp.Delegation(ctx, contract, argsBz, stateDB, readOnly)
 	case string(UnbondingDelegationMethod.ID):
-		return sp.UnbondingDelegation(ctx, argsBz, stateDB)
+		return sp.UnbondingDelegation(ctx, contract, argsBz, stateDB, readOnly)
 	case string(ValidatorMethod.ID):
-		return sp.Validator(ctx, argsBz, stateDB)
+		return sp.Validator(ctx, contract, argsBz, stateDB, readOnly)
 
-	// TODO: get delegation
+	// TODO: Add other queries
+	// TODO: how do we handle paginations?
 	default:
 		return nil, fmt.Errorf("unknown method '%s'", methodID)
 	}

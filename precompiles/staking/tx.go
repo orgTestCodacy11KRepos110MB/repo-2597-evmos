@@ -19,9 +19,13 @@ package staking
 import (
 	"errors"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/core/vm"
+
+	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
-	"github.com/ethereum/go-ethereum/accounts/abi"
+
 	"github.com/evmos/ethermint/x/evm/statedb"
 )
 
@@ -39,11 +43,146 @@ var (
 	CancelUnbondingDelegationMethod abi.Method
 )
 
-func (sp *StakingPrecompile) Delegate(ctx sdk.Context, argsBz []byte, stateDB statedb.ExtStateDB) ([]byte, error) {
+func init() {
+	addressType, _ := abi.NewType("address", "", nil)
+	stringType, _ := abi.NewType("string", "", nil)
+	uint256Type, _ := abi.NewType("uint256", "", nil)
+
+	DelegateMethod = abi.NewMethod(
+		"delegate", // name
+		"delegate", // raw name
+		abi.Function,
+		"",
+		false,
+		false,
+		abi.Arguments{
+			{
+				Name: "delegatorAddress",
+				Type: addressType,
+			},
+			{
+				Name: "validatorAddress",
+				Type: stringType,
+			},
+			{
+				Name: "amount",
+				Type: uint256Type,
+			},
+		},
+		abi.Arguments{},
+	)
+
+	UndelegateMethod = abi.NewMethod(
+		"undelegate", // name
+		"undelegate", // raw name
+		abi.Function,
+		"",
+		false,
+		false,
+		abi.Arguments{
+			{
+				Name: "delegatorAddress",
+				Type: addressType,
+			},
+			{
+				Name: "validatorAddress",
+				Type: stringType,
+			},
+			{
+				Name: "amount",
+				Type: uint256Type,
+			},
+		},
+		abi.Arguments{
+			{
+				Name: "completionTime",
+				Type: uint256Type,
+			},
+		},
+	)
+
+	RedelegateMethod = abi.NewMethod(
+		"redelegate", // name
+		"redelegate", // raw name
+		abi.Function,
+		"",
+		false,
+		false,
+		abi.Arguments{
+			{
+				Name: "delegatorAddress",
+				Type: addressType,
+			},
+			{
+				Name: "validatorSrcAddress",
+				Type: stringType,
+			},
+			{
+				Name: "validatorDstAddress",
+				Type: stringType,
+			},
+			{
+				Name: "amount",
+				Type: uint256Type,
+			},
+		},
+		abi.Arguments{
+			{
+				Name: "completionTime",
+				Type: uint256Type,
+			},
+		},
+	)
+
+	CancelUnbondingDelegationMethod = abi.NewMethod(
+		"cancelUnbondingDelegation", // name
+		"cancelUnbondingDelegation", // raw name
+		abi.Function,
+		"",
+		false,
+		false,
+		abi.Arguments{
+			{
+				Name: "delegatorAddress",
+				Type: addressType,
+			},
+			{
+				Name: "validatorSrcAddress",
+				Type: stringType,
+			},
+			{
+				Name: "validatorDstAddress",
+				Type: stringType,
+			},
+			{
+				Name: "amount",
+				Type: uint256Type,
+			},
+		},
+		abi.Arguments{},
+	)
+}
+
+func (sp *StakingPrecompile) Delegate(
+	ctx sdk.Context,
+	contract *vm.Contract,
+	argsBz []byte,
+	stateDB *statedb.StateDB,
+	readOnly bool,
+) ([]byte, error) {
+	if readOnly {
+		return nil, vm.ErrWriteProtection
+	}
+
 	args, err := DelegateMethod.Inputs.Unpack(argsBz)
 	if err != nil {
 		return nil, errors.New("fail to unpack input arguments")
 	}
+
+	initialGas := ctx.GasMeter().GasConsumed()
+
+	ctx = ctx.WithKVGasConfig(storetypes.KVGasConfig()).
+		WithKVGasConfig(storetypes.TransientGasConfig())
 
 	denom := sp.stakingKeeper.BondDenom(ctx)
 
@@ -60,12 +199,28 @@ func (sp *StakingPrecompile) Delegate(ctx sdk.Context, argsBz []byte, stateDB st
 		return nil, err
 	}
 
+	cost := cacheCtx.GasMeter().GasConsumed() - initialGas
+
+	if !contract.UseGas(cost) {
+		return nil, vm.ErrOutOfGas
+	}
+
 	writeFn()
 
 	return nil, nil
 }
 
-func (sp *StakingPrecompile) Undelegate(ctx sdk.Context, argsBz []byte, stateDB statedb.ExtStateDB) ([]byte, error) {
+func (sp *StakingPrecompile) Undelegate(
+	ctx sdk.Context,
+	contract *vm.Contract,
+	argsBz []byte,
+	stateDB *statedb.StateDB,
+	readOnly bool,
+) ([]byte, error) {
+	if readOnly {
+		return nil, vm.ErrWriteProtection
+	}
+
 	args, err := UndelegateMethod.Inputs.Unpack(argsBz)
 	if err != nil {
 		return nil, errors.New("fail to unpack input arguments")
@@ -98,7 +253,17 @@ func (sp *StakingPrecompile) Undelegate(ctx sdk.Context, argsBz []byte, stateDB 
 	return bz, nil
 }
 
-func (sp *StakingPrecompile) Redelegate(ctx sdk.Context, argsBz []byte, stateDB statedb.ExtStateDB) ([]byte, error) {
+func (sp *StakingPrecompile) Redelegate(
+	ctx sdk.Context,
+	contract *vm.Contract,
+	argsBz []byte,
+	stateDB *statedb.StateDB,
+	readOnly bool,
+) ([]byte, error) {
+	if readOnly {
+		return nil, vm.ErrWriteProtection
+	}
+
 	args, err := RedelegateMethod.Inputs.Unpack(argsBz)
 	if err != nil {
 		return nil, errors.New("fail to unpack input arguments")
@@ -131,7 +296,17 @@ func (sp *StakingPrecompile) Redelegate(ctx sdk.Context, argsBz []byte, stateDB 
 	return bz, nil
 }
 
-func (sp *StakingPrecompile) CancelUnbondingDelegation(ctx sdk.Context, argsBz []byte, stateDB statedb.ExtStateDB) ([]byte, error) {
+func (sp *StakingPrecompile) CancelUnbondingDelegation(
+	ctx sdk.Context,
+	contract *vm.Contract,
+	argsBz []byte,
+	stateDB *statedb.StateDB,
+	readOnly bool,
+) ([]byte, error) {
+	if readOnly {
+		return nil, vm.ErrWriteProtection
+	}
+
 	args, err := CancelUnbondingDelegationMethod.Inputs.Unpack(argsBz)
 	if err != nil {
 		return nil, errors.New("fail to unpack input arguments")
