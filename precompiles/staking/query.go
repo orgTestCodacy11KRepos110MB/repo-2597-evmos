@@ -18,11 +18,9 @@ package staking
 
 import (
 	"errors"
-	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
-	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -116,50 +114,4 @@ func (sp *StakingPrecompile) Validator(ctx sdk.Context, argsBz []byte, stateDB s
 	}
 
 	return bz, nil
-}
-
-func checkDelegationArgs(args []interface{}) (*stakingtypes.QueryDelegationRequest, error) {
-	if len(args) != 2 {
-		return nil, fmt.Errorf("invalid input arguments. Expected 3, got %d", len(args))
-	}
-
-	delegatorAddr, _ := args[0].(string)
-	validatorAddr, _ := args[1].(string)
-
-	req := &stakingtypes.QueryDelegationRequest{
-		DelegatorAddr: delegatorAddr,
-		ValidatorAddr: validatorAddr,
-	}
-
-	return req, nil
-}
-
-func checkUnbondingDelegationArgs(args []interface{}) (*stakingtypes.QueryUnbondingDelegationRequest, error) {
-	if len(args) != 2 {
-		return nil, fmt.Errorf("invalid input arguments. Expected 3, got %d", len(args))
-	}
-
-	delegatorAddr, _ := args[0].(string)
-	validatorAddr, _ := args[1].(string)
-
-	req := &stakingtypes.QueryUnbondingDelegationRequest{
-		DelegatorAddr: delegatorAddr,
-		ValidatorAddr: validatorAddr,
-	}
-
-	return req, nil
-}
-
-func checkValidatorArgs(args []interface{}) (*stakingtypes.QueryValidatorRequest, error) {
-	if len(args) != 1 {
-		return nil, fmt.Errorf("invalid input arguments. Expected 3, got %d", len(args))
-	}
-
-	validatorAddr, _ := args[1].(string)
-
-	req := &stakingtypes.QueryValidatorRequest{
-		ValidatorAddr: validatorAddr,
-	}
-
-	return req, nil
 }

@@ -157,3 +157,49 @@ func checkCancelUnbondingDelegationArgs(denom string, args []interface{}) (*stak
 
 	return msg, nil
 }
+
+func checkDelegationArgs(args []interface{}) (*stakingtypes.QueryDelegationRequest, error) {
+	if len(args) != 2 {
+		return nil, fmt.Errorf("invalid input arguments. Expected 3, got %d", len(args))
+	}
+
+	delegatorAddr, _ := args[0].(string)
+	validatorAddr, _ := args[1].(string)
+
+	req := &stakingtypes.QueryDelegationRequest{
+		DelegatorAddr: delegatorAddr,
+		ValidatorAddr: validatorAddr,
+	}
+
+	return req, nil
+}
+
+func checkUnbondingDelegationArgs(args []interface{}) (*stakingtypes.QueryUnbondingDelegationRequest, error) {
+	if len(args) != 2 {
+		return nil, fmt.Errorf("invalid input arguments. Expected 3, got %d", len(args))
+	}
+
+	delegatorAddr, _ := args[0].(string)
+	validatorAddr, _ := args[1].(string)
+
+	req := &stakingtypes.QueryUnbondingDelegationRequest{
+		DelegatorAddr: delegatorAddr,
+		ValidatorAddr: validatorAddr,
+	}
+
+	return req, nil
+}
+
+func checkValidatorArgs(args []interface{}) (*stakingtypes.QueryValidatorRequest, error) {
+	if len(args) != 1 {
+		return nil, fmt.Errorf("invalid input arguments. Expected 3, got %d", len(args))
+	}
+
+	validatorAddr, _ := args[1].(string)
+
+	req := &stakingtypes.QueryValidatorRequest{
+		ValidatorAddr: validatorAddr,
+	}
+
+	return req, nil
+}
