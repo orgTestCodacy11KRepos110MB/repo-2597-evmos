@@ -17,8 +17,6 @@
 package staking
 
 import (
-	"errors"
-
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/vm"
 
@@ -161,11 +159,7 @@ func init() {
 				Type: addressType,
 			},
 			{
-				Name: "validatorSrcAddress",
-				Type: stringType,
-			},
-			{
-				Name: "validatorDstAddress",
+				Name: "validatorAddress",
 				Type: stringType,
 			},
 			{
@@ -174,6 +168,10 @@ func init() {
 			},
 			{
 				Name: "amount",
+				Type: uint256Type,
+			},
+			{
+				Name: "creationHeight",
 				Type: uint256Type,
 			},
 		},
@@ -280,14 +278,13 @@ func (sp *StakingPrecompile) Redelegate(
 		return nil, vm.ErrWriteProtection
 	}
 
-	args, err := RedelegateMethod.Inputs.Unpack(argsBz)
+	var redelegateInput RedelegateInput
+	err := precompiles.UnpackIntoInterface(&redelegateInput, RedelegateMethod.Inputs, argsBz)
 	if err != nil {
-		return nil, errors.New("fail to unpack input arguments")
+		return nil, err
 	}
 
-	denom := sp.stakingKeeper.BondDenom(ctx)
-
-	msg, err := checkRedelegateArgs(denom, args)
+	msg, err := redelegateInput.ToMessage()
 	if err != nil {
 		return nil, err
 	}
@@ -301,8 +298,8 @@ func (sp *StakingPrecompile) Redelegate(
 		return nil, err
 	}
 
-	completionTimestamp := res.CompletionTime.UTC().Unix()
-	bz, err := RedelegateMethod.Outputs.Pack(completionTimestamp)
+	output := new(RedelegateOutput).FromMessage(res)
+	bz, err := output.Pack(RedelegateMethod.Outputs)
 	if err != nil {
 		return nil, err
 	}
@@ -323,14 +320,13 @@ func (sp *StakingPrecompile) CancelUnbondingDelegation(
 		return nil, vm.ErrWriteProtection
 	}
 
-	args, err := CancelUnbondingDelegationMethod.Inputs.Unpack(argsBz)
+	var cancelUnbondingDelegationInput CancelUnbondingDelegationInput
+	err := precompiles.UnpackIntoInterface(&cancelUnbondingDelegationInput, CancelUnbondingDelegationMethod.Inputs, argsBz)
 	if err != nil {
-		return nil, errors.New("fail to unpack input arguments")
+		return nil, err
 	}
 
-	denom := sp.stakingKeeper.BondDenom(ctx)
-
-	msg, err := checkCancelUnbondingDelegationArgs(denom, args)
+	msg, err := cancelUnbondingDelegationInput.ToMessage()
 	if err != nil {
 		return nil, err
 	}

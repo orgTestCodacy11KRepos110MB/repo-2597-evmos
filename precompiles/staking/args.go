@@ -18,81 +18,9 @@ package staking
 
 import (
 	"fmt"
-	"math/big"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	"github.com/ethereum/go-ethereum/common"
 )
-
-func checkRedelegateArgs(denom string, args []interface{}) (*stakingtypes.MsgBeginRedelegate, error) {
-	if len(args) != 4 {
-		return nil, fmt.Errorf("invalid input arguments. Expected 4, got %d", len(args))
-	}
-
-	delegatorAddr, _ := args[0].(common.Address)
-	validatorSrcAddr, _ := args[1].(string)
-	validatorDstAddr, _ := args[2].(string)
-	amount, ok := args[3].(*big.Int)
-	if !ok || amount == nil {
-		amount = big.NewInt(0)
-	}
-
-	coin := sdk.Coin{
-		Denom:  denom,
-		Amount: sdk.NewIntFromBigInt(amount),
-	}
-
-	delAddr := sdk.AccAddress(delegatorAddr.Bytes())
-
-	msg := &stakingtypes.MsgBeginRedelegate{
-		DelegatorAddress:    delAddr.String(), // bech32 formatted
-		ValidatorSrcAddress: validatorSrcAddr,
-		ValidatorDstAddress: validatorDstAddr,
-		Amount:              coin,
-	}
-
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
-
-	return msg, nil
-}
-
-func checkCancelUnbondingDelegationArgs(denom string, args []interface{}) (*stakingtypes.MsgCancelUnbondingDelegation, error) {
-	if len(args) != 4 {
-		return nil, fmt.Errorf("invalid input arguments. Expected 4, got %d", len(args))
-	}
-
-	delegatorAddr, _ := args[0].(common.Address)
-	validatorAddr, _ := args[1].(string)
-	amount, ok := args[2].(*big.Int)
-	if !ok || amount == nil {
-		amount = big.NewInt(0)
-	}
-
-	creationHeight, _ := args[3].(int64)
-
-	coin := sdk.Coin{
-		Denom:  denom,
-		Amount: sdk.NewIntFromBigInt(amount),
-	}
-
-	delAddr := sdk.AccAddress(delegatorAddr.Bytes())
-
-	msg := &stakingtypes.MsgCancelUnbondingDelegation{
-		DelegatorAddress: delAddr.String(), // bech32 formatted
-		ValidatorAddress: validatorAddr,
-		Amount:           coin,
-		CreationHeight:   creationHeight,
-	}
-
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
-
-	return msg, nil
-}
 
 func checkDelegationArgs(args []interface{}) (*stakingtypes.QueryDelegationRequest, error) {
 	if len(args) != 2 {

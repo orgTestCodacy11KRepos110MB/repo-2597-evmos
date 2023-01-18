@@ -86,3 +86,68 @@ func (uo *UndelegateOutput) FromMessage(res *stakingtypes.MsgUndelegateResponse)
 func (uo UndelegateOutput) Pack(args abi.Arguments) ([]byte, error) {
 	return args.Pack(uo.CompletionTime)
 }
+
+type RedelegateInput struct {
+	DelegatorAddress    common.Address
+	ValidatorSrcAddress string
+	ValidatorDstAddress string
+	Denom               string
+	Amount              *big.Int
+}
+
+func (ri RedelegateInput) ToMessage() (*stakingtypes.MsgBeginRedelegate, error) {
+	msg := &stakingtypes.MsgBeginRedelegate{
+		DelegatorAddress:    sdk.AccAddress(ri.DelegatorAddress.Bytes()).String(), // bech32 formatted
+		ValidatorSrcAddress: ri.ValidatorSrcAddress,
+		ValidatorDstAddress: ri.ValidatorDstAddress,
+		Amount: sdk.Coin{
+			Denom:  ri.Denom,
+			Amount: sdk.NewIntFromBigInt(ri.Amount),
+		},
+	}
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	return msg, nil
+}
+
+type RedelegateOutput struct {
+	CompletionTime *big.Int
+}
+
+func (ro *RedelegateOutput) FromMessage(res *stakingtypes.MsgBeginRedelegateResponse) *RedelegateOutput {
+	ro.CompletionTime = big.NewInt(res.CompletionTime.UTC().Unix())
+	return ro
+}
+
+func (uo RedelegateOutput) Pack(args abi.Arguments) ([]byte, error) {
+	return args.Pack(uo.CompletionTime)
+}
+
+type CancelUnbondingDelegationInput struct {
+	DelegatorAddress common.Address
+	ValidatorAddress string
+	Denom            string
+	Amount           *big.Int
+	CreationHeight   *big.Int
+}
+
+func (ci CancelUnbondingDelegationInput) ToMessage() (*stakingtypes.MsgCancelUnbondingDelegation, error) {
+	msg := &stakingtypes.MsgCancelUnbondingDelegation{
+		DelegatorAddress: sdk.AccAddress(ci.DelegatorAddress.Bytes()).String(), // bech32 formatted
+		ValidatorAddress: ci.ValidatorAddress,
+		Amount: sdk.Coin{
+			Denom:  ci.Denom,
+			Amount: sdk.NewIntFromBigInt(ci.Amount),
+		},
+		CreationHeight: ci.Amount.Int64(),
+	}
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	return msg, nil
+}
