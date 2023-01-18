@@ -27,6 +27,8 @@ import (
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 
 	"github.com/evmos/ethermint/x/evm/statedb"
+
+	"github.com/evmos/evmos/v11/precompiles"
 )
 
 var (
@@ -65,6 +67,10 @@ func init() {
 				Type: stringType,
 			},
 			{
+				Name: "denom",
+				Type: stringType,
+			},
+			{
 				Name: "amount",
 				Type: uint256Type,
 			},
@@ -86,6 +92,10 @@ func init() {
 			},
 			{
 				Name: "validatorAddress",
+				Type: stringType,
+			},
+			{
+				Name: "denom",
 				Type: stringType,
 			},
 			{
@@ -122,6 +132,10 @@ func init() {
 				Type: stringType,
 			},
 			{
+				Name: "denom",
+				Type: stringType,
+			},
+			{
 				Name: "amount",
 				Type: uint256Type,
 			},
@@ -155,6 +169,10 @@ func init() {
 				Type: stringType,
 			},
 			{
+				Name: "denom",
+				Type: stringType,
+			},
+			{
 				Name: "amount",
 				Type: uint256Type,
 			},
@@ -174,22 +192,21 @@ func (sp *StakingPrecompile) Delegate(
 		return nil, vm.ErrWriteProtection
 	}
 
-	args, err := DelegateMethod.Inputs.Unpack(argsBz)
+	var delegateInput DelegateInput
+	err := precompiles.UnpackIntoInterface(&delegateInput, DelegateMethod.Inputs, argsBz)
 	if err != nil {
-		return nil, errors.New("fail to unpack input arguments")
+		return nil, err
+	}
+
+	msg, err := delegateInput.ToMessage()
+	if err != nil {
+		return nil, err
 	}
 
 	initialGas := ctx.GasMeter().GasConsumed()
 
 	ctx = ctx.WithKVGasConfig(storetypes.KVGasConfig()).
 		WithKVGasConfig(storetypes.TransientGasConfig())
-
-	denom := sp.stakingKeeper.BondDenom(ctx)
-
-	msg, err := checkDelegateArgs(denom, args)
-	if err != nil {
-		return nil, err
-	}
 
 	msgSrv := stakingkeeper.NewMsgServerImpl(sp.stakingKeeper)
 
@@ -221,14 +238,13 @@ func (sp *StakingPrecompile) Undelegate(
 		return nil, vm.ErrWriteProtection
 	}
 
-	args, err := UndelegateMethod.Inputs.Unpack(argsBz)
+	var undelegateInput UndelegateInput
+	err := precompiles.UnpackIntoInterface(&undelegateInput, UndelegateMethod.Inputs, argsBz)
 	if err != nil {
-		return nil, errors.New("fail to unpack input arguments")
+		return nil, err
 	}
 
-	denom := sp.stakingKeeper.BondDenom(ctx)
-
-	msg, err := checkUndelegateArgs(denom, args)
+	msg, err := undelegateInput.ToMessage()
 	if err != nil {
 		return nil, err
 	}
@@ -242,8 +258,8 @@ func (sp *StakingPrecompile) Undelegate(
 		return nil, err
 	}
 
-	completionTimestamp := res.CompletionTime.UTC().Unix()
-	bz, err := UndelegateMethod.Outputs.Pack(completionTimestamp)
+	output := new(UndelegateOutput).FromMessage(res)
+	bz, err := output.Pack(UndelegateMethod.Outputs)
 	if err != nil {
 		return nil, err
 	}
