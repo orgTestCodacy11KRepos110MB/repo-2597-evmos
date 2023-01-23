@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 
 	"github.com/evmos/ethermint/x/evm/statedb"
+	"github.com/evmos/evmos/v11/precompiles"
 )
 
 var (
@@ -84,15 +85,13 @@ func (sp *StakingPrecompile) Delegation(ctx sdk.Context,
 	stateDB *statedb.StateDB,
 	readOnly bool,
 ) ([]byte, error) {
-	args, err := DelegationMethod.Inputs.Unpack(argsBz)
-	if err != nil {
-		return nil, errors.New("fail to unpack input arguments")
-	}
-
-	req, err := checkDelegationArgs(args)
+	var delegationInput DelegationInput
+	err := precompiles.UnpackIntoInterface(&delegationInput, DelegationMethod.Inputs, argsBz)
 	if err != nil {
 		return nil, err
 	}
+
+	req := delegationInput.ToRequest()
 
 	queryServer := stakingkeeper.Querier{Keeper: sp.stakingKeeper}
 
@@ -101,16 +100,9 @@ func (sp *StakingPrecompile) Delegation(ctx sdk.Context,
 		return nil, err
 	}
 
-	shares := res.DelegationResponse.Delegation.Shares.BigInt()
-	denom := res.DelegationResponse.Balance.Denom
-	amount := res.DelegationResponse.Balance.Amount.BigInt()
+	out := new(DelegationOutput).FromResponse(res)
 
-	bz, err := DelegationMethod.Outputs.Pack(shares, denom, amount)
-	if err != nil {
-		return nil, err
-	}
-
-	return bz, nil
+	return out.Pack(DelegationMethod.Outputs)
 }
 
 func (sp *StakingPrecompile) UnbondingDelegation(ctx sdk.Context,
@@ -119,15 +111,13 @@ func (sp *StakingPrecompile) UnbondingDelegation(ctx sdk.Context,
 	stateDB *statedb.StateDB,
 	readOnly bool,
 ) ([]byte, error) {
-	args, err := UnbondingDelegationMethod.Inputs.Unpack(argsBz)
-	if err != nil {
-		return nil, errors.New("fail to unpack input arguments")
-	}
-
-	req, err := checkUnbondingDelegationArgs(args)
+	var input UnbondingDelegationInput
+	err := precompiles.UnpackIntoInterface(&input, UnbondingDelegationMethod.Inputs, argsBz)
 	if err != nil {
 		return nil, err
 	}
+
+	req := input.ToRequest()
 
 	queryServer := stakingkeeper.Querier{Keeper: sp.stakingKeeper}
 
