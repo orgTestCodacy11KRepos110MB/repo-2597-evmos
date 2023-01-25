@@ -28,7 +28,6 @@ struct Coin {
   uint256 amount;
 }
 
-
 /// BondStatus is the status of the validator
 enum BondStatus {
   Unspecified,
@@ -36,8 +35,6 @@ enum BondStatus {
   Unbonding,
   Bonded
 }
-
-
 
 /// @author Evmos Team
 /// @title Staking Precompiled Contract
@@ -106,8 +103,7 @@ interface StakingI {
       string memory validatorAddress
     ) external view returns (
       uint256 shares,
-      string memory denom,
-      uint256 amount
+      Coin calldata balance
     );
 
     /// @dev Delegation the given amount of the bond denomination to a validator.
@@ -118,8 +114,7 @@ interface StakingI {
       string memory validatorAddress
     ) external view returns (
       uint256 shares,
-      string memory denom,
-      uint256 amount
+      Coin calldata balance
     );
 
     /// @dev Delegation the given amount of the bond denomination to a validator.
@@ -127,12 +122,6 @@ interface StakingI {
     function validator(
       string memory validatorAddress
     ) external view returns (
-      string memory operatorAddress,
-      string memory consensusPubkey,
-      bool jailed,
-      BondStatus status,
-      uint256 shares,
-      string memory denom,
-      uint256 amount
+      Validator calldata validator
     );
 }

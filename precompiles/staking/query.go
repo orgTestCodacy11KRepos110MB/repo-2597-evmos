@@ -18,66 +18,27 @@ package staking
 
 import (
 	"errors"
+	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/vm"
 
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/evmos/v11/precompiles"
 )
 
-var (
-	// DelegationMethod defines the ABI method signature for the staking Delegation
-	// query function.
-	DelegationMethod abi.Method
-	// UnbondingDelegationMethod defines the ABI method signature for the staking
-	// UnbondingDelegationMethod query function.
-	UnbondingDelegationMethod abi.Method
-	// Validator defines the ABI method signature for the staking
-	// Validator query function.
-	ValidatorMethod abi.Method
+const (
+	// DelegationMethod defines the ABI method name for the staking Delegation
+	// query.
+	DelegationMethod = "delegation"
+	// UnbondingDelegationMethod defines the ABI method name for the staking
+	// UnbondingDelegationMethod query.
+	UnbondingDelegationMethod = "unbonding"
+	// Validator defines the ABI method name for the staking
+	// Validator query.
+	ValidatorMethod = "validator"
 )
-
-func init() {
-	addressType, _ := abi.NewType("address", "", nil)
-	stringType, _ := abi.NewType("string", "", nil)
-	uint256Type, _ := abi.NewType("uint256", "", nil)
-
-	DelegationMethod = abi.NewMethod(
-		"delegation", // name
-		"delegation", // raw name
-		abi.Function,
-		"",
-		false,
-		false,
-		abi.Arguments{
-			{
-				Name: "delegatorAddress",
-				Type: addressType,
-			},
-			{
-				Name: "validatorAddress",
-				Type: stringType,
-			},
-		},
-		abi.Arguments{
-			{
-				Name: "shares",
-				Type: uint256Type,
-			},
-			{
-				Name: "denom",
-				Type: stringType,
-			},
-			{
-				Name: "amount",
-				Type: uint256Type,
-			},
-		},
-	)
-}
 
 func (sp *StakingPrecompile) Delegation(ctx sdk.Context,
 	contract *vm.Contract,
@@ -85,8 +46,13 @@ func (sp *StakingPrecompile) Delegation(ctx sdk.Context,
 	stateDB *statedb.StateDB,
 	readOnly bool,
 ) ([]byte, error) {
+	method, ok := sp.ABI.Methods[DelegationMethod]
+	if !ok {
+		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
+	}
+
 	var delegationInput DelegationInput
-	err := precompiles.UnpackIntoInterface(&delegationInput, DelegationMethod.Inputs, argsBz)
+	err := precompiles.UnpackIntoInterface(&delegationInput, method.Inputs, argsBz)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +68,7 @@ func (sp *StakingPrecompile) Delegation(ctx sdk.Context,
 
 	out := new(DelegationOutput).FromResponse(res)
 
-	return out.Pack(DelegationMethod.Outputs)
+	return out.Pack(method.Outputs)
 }
 
 func (sp *StakingPrecompile) UnbondingDelegation(ctx sdk.Context,
@@ -111,8 +77,13 @@ func (sp *StakingPrecompile) UnbondingDelegation(ctx sdk.Context,
 	stateDB *statedb.StateDB,
 	readOnly bool,
 ) ([]byte, error) {
+	method, ok := sp.ABI.Methods[UnbondingDelegationMethod]
+	if !ok {
+		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
+	}
+
 	var input UnbondingDelegationInput
-	err := precompiles.UnpackIntoInterface(&input, UnbondingDelegationMethod.Inputs, argsBz)
+	err := precompiles.UnpackIntoInterface(&input, method.Inputs, argsBz)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +97,7 @@ func (sp *StakingPrecompile) UnbondingDelegation(ctx sdk.Context,
 		return nil, err
 	}
 
-	bz, err := UnbondingDelegationMethod.Outputs.Pack(res)
+	bz, err := method.Outputs.Pack(res)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +111,12 @@ func (sp *StakingPrecompile) Validator(ctx sdk.Context,
 	stateDB *statedb.StateDB,
 	readOnly bool,
 ) ([]byte, error) {
-	args, err := ValidatorMethod.Inputs.Unpack(argsBz)
+	method, ok := sp.ABI.Methods[ValidatorMethod]
+	if !ok {
+		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
+	}
+
+	args, err := method.Inputs.Unpack(argsBz)
 	if err != nil {
 		return nil, errors.New("fail to unpack input arguments")
 	}
@@ -160,7 +136,9 @@ func (sp *StakingPrecompile) Validator(ctx sdk.Context,
 	// TODO: define all args for response
 	// res.Validator.OperatorAddress
 
-	bz, err := ValidatorMethod.Outputs.Pack(res)
+	// TODO: convert to response
+
+	bz, err := method.Outputs.Pack(res)
 	if err != nil {
 		return nil, err
 	}

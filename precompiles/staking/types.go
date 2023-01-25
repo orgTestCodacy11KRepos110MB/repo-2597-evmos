@@ -192,20 +192,3 @@ func (udi UnbondingDelegationInput) ToRequest() *stakingtypes.QueryUnbondingDele
 		ValidatorAddr: udi.ValidatorAddress,
 	}
 }
-
-type DelegationOutput struct {
-	Shares *big.Int
-	Denom  string
-	Amount *big.Int
-}
-
-func (do *DelegationOutput) FromResponse(res *stakingtypes.QueryDelegationResponse) *DelegationOutput {
-	do.Shares = res.DelegationResponse.Delegation.Shares.BigInt()
-	do.Denom = res.DelegationResponse.Balance.Denom
-	do.Amount = res.DelegationResponse.Balance.Amount.BigInt()
-	return do
-}
-
-func (do DelegationOutput) Pack(args abi.Arguments) ([]byte, error) {
-	return args.Pack(do.Shares, do.Denom, do.Amount)
-}

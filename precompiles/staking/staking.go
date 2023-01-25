@@ -19,7 +19,11 @@ package staking
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
+	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 
@@ -29,16 +33,33 @@ import (
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 )
 
+const abiPath = "./abi.json"
+
 var _ vm.PrecompiledContract = &StakingPrecompile{}
 
+// StakingPrecompile defines the precompiled contract for staking.
 type StakingPrecompile struct {
+	*abi.ABI
 	stakingKeeper stakingkeeper.Keeper
 }
 
+// NewStakingPrecompile creates a new StakingPrecompile instance as a
+// PrecompiledContract interface.
 func NewStakingPrecompile(
 	stakingKeeper stakingkeeper.Keeper,
-) vm.PrecompiledContract {
+) (vm.PrecompiledContract, error) {
+	abiJSON, err := ioutil.ReadFile(filepath.Clean(abiPath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open abi.json file: %w", err)
+	}
+
+	abi, err := abi.JSON(strings.NewReader(string(abiJSON)))
+	if err != nil {
+		return nil, fmt.Errorf("invalid abi.json file: %w", err)
+	}
+
 	return &StakingPrecompile{
+		ABI:           abi,
 		stakingKeeper: stakingKeeper,
 	}
 }
@@ -60,6 +81,7 @@ func (sp *StakingPrecompile) RequiredGas(input []byte) uint64 {
 	return 0
 }
 
+// Run executes the data
 func (sp *StakingPrecompile) Run(evm *vm.EVM, contract *vm.Contract, input []byte, readOnly bool) ([]byte, error) {
 	stateDB, ok := evm.StateDB.(*statedb.StateDB)
 	if !ok {
@@ -72,27 +94,27 @@ func (sp *StakingPrecompile) Run(evm *vm.EVM, contract *vm.Contract, input []byt
 	methodID := string(input[:4])
 	argsBz := input[4:]
 
-	switch methodID {
+	switch string(methodID) {
 	// Staking transactions
-	case string(DelegateMethod.ID):
+	case DelegateMethod:
 		return sp.Delegate(ctx, contract, argsBz, stateDB, readOnly)
-	case string(UndelegateMethod.ID):
+	case UndelegateMethod:
 		return sp.Undelegate(ctx, contract, argsBz, stateDB, readOnly)
-	case string(RedelegateMethod.ID):
+	case RedelegateMethod:
 		return sp.Redelegate(ctx, contract, argsBz, stateDB, readOnly)
-	case string(CancelUnbondingDelegationMethod.ID):
+	case CancelUnbondingDelegationMethod:
 		return sp.CancelUnbondingDelegation(ctx, contract, argsBz, stateDB, readOnly)
 		// Staking queries
-	case string(DelegationMethod.ID):
+	case DelegationMethod:
 		return sp.Delegation(ctx, contract, argsBz, stateDB, readOnly)
-	case string(UnbondingDelegationMethod.ID):
+	case UnbondingDelegationMethod:
 		return sp.UnbondingDelegation(ctx, contract, argsBz, stateDB, readOnly)
-	case string(ValidatorMethod.ID):
+	case ValidatorMethod:
 		return sp.Validator(ctx, contract, argsBz, stateDB, readOnly)
 
 	// TODO: Add other queries
 	// TODO: how do we handle paginations?
 	default:
-		return nil, fmt.Errorf("unknown method '%s'", methodID)
+		return nil, fmt.Errorf("no method with id: %#x", methodID)
 	}
 }

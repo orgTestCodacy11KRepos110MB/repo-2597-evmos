@@ -17,11 +17,13 @@
 package staking
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/core/vm"
 
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -29,156 +31,22 @@ import (
 	"github.com/evmos/evmos/v11/precompiles"
 )
 
-var (
-	// DelegateMethod defines the ABI method signature for the staking Delegate
-	// function.
-	DelegateMethod abi.Method
-	// UndelegateMethod defines the ABI method signature for the staking Undelegate
-	// function.
-	UndelegateMethod abi.Method
-
-	// RedelegateMethod
-	RedelegateMethod abi.Method
-	// CancelUnbondingDelegationMethod
-	CancelUnbondingDelegationMethod abi.Method
+const (
+	// DelegateMethod defines the ABI method name for the staking Delegate
+	// transaction.
+	DelegateMethod = "delegate"
+	// UndelegateMethod defines the ABI method name for the staking Undelegate
+	// transaction.
+	UndelegateMethod = "undelegate"
+	// RedelegateMethod defines the ABI method name for the staking Redelegate
+	// transaction.
+	RedelegateMethod = "redelegate"
+	// CancelUnbondingDelegationMethod defines the ABI method name for the staking
+	// CancelUnbondingDelegation transaction.
+	CancelUnbondingDelegationMethod = "cancelUnbondingDelegation"
 )
 
-func init() {
-	addressType, _ := abi.NewType("address", "", nil)
-	stringType, _ := abi.NewType("string", "", nil)
-	uint256Type, _ := abi.NewType("uint256", "", nil)
-
-	DelegateMethod = abi.NewMethod(
-		"delegate", // name
-		"delegate", // raw name
-		abi.Function,
-		"",
-		false,
-		false,
-		abi.Arguments{
-			{
-				Name: "delegatorAddress",
-				Type: addressType,
-			},
-			{
-				Name: "validatorAddress",
-				Type: stringType,
-			},
-			{
-				Name: "denom",
-				Type: stringType,
-			},
-			{
-				Name: "amount",
-				Type: uint256Type,
-			},
-		},
-		abi.Arguments{},
-	)
-
-	UndelegateMethod = abi.NewMethod(
-		"undelegate", // name
-		"undelegate", // raw name
-		abi.Function,
-		"",
-		false,
-		false,
-		abi.Arguments{
-			{
-				Name: "delegatorAddress",
-				Type: addressType,
-			},
-			{
-				Name: "validatorAddress",
-				Type: stringType,
-			},
-			{
-				Name: "denom",
-				Type: stringType,
-			},
-			{
-				Name: "amount",
-				Type: uint256Type,
-			},
-		},
-		abi.Arguments{
-			{
-				Name: "completionTime",
-				Type: uint256Type,
-			},
-		},
-	)
-
-	RedelegateMethod = abi.NewMethod(
-		"redelegate", // name
-		"redelegate", // raw name
-		abi.Function,
-		"",
-		false,
-		false,
-		abi.Arguments{
-			{
-				Name: "delegatorAddress",
-				Type: addressType,
-			},
-			{
-				Name: "validatorSrcAddress",
-				Type: stringType,
-			},
-			{
-				Name: "validatorDstAddress",
-				Type: stringType,
-			},
-			{
-				Name: "denom",
-				Type: stringType,
-			},
-			{
-				Name: "amount",
-				Type: uint256Type,
-			},
-		},
-		abi.Arguments{
-			{
-				Name: "completionTime",
-				Type: uint256Type,
-			},
-		},
-	)
-
-	CancelUnbondingDelegationMethod = abi.NewMethod(
-		"cancelUnbondingDelegation", // name
-		"cancelUnbondingDelegation", // raw name
-		abi.Function,
-		"",
-		false,
-		false,
-		abi.Arguments{
-			{
-				Name: "delegatorAddress",
-				Type: addressType,
-			},
-			{
-				Name: "validatorAddress",
-				Type: stringType,
-			},
-			{
-				Name: "denom",
-				Type: stringType,
-			},
-			{
-				Name: "amount",
-				Type: uint256Type,
-			},
-			{
-				Name: "creationHeight",
-				Type: uint256Type,
-			},
-		},
-		abi.Arguments{},
-	)
-}
-
+// Delegate performs the staking delegation.
 func (sp *StakingPrecompile) Delegate(
 	ctx sdk.Context,
 	contract *vm.Contract,
@@ -190,10 +58,20 @@ func (sp *StakingPrecompile) Delegate(
 		return nil, vm.ErrWriteProtection
 	}
 
+	method, ok := sp.ABI.Methods[DelegateMethod]
+	if !ok {
+		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
+	}
+
 	var delegateInput DelegateInput
-	err := precompiles.UnpackIntoInterface(&delegateInput, DelegateMethod.Inputs, argsBz)
+	err := precompiles.UnpackIntoInterface(&delegateInput, method.Inputs, argsBz)
 	if err != nil {
 		return nil, err
+	}
+
+	// verify that the delegator is the contract caller
+	if delegateInput.DelegatorAddress != contract.Caller() {
+		return nil, sdkerrors.ErrUnauthorized
 	}
 
 	msg, err := delegateInput.ToMessage()
@@ -201,8 +79,11 @@ func (sp *StakingPrecompile) Delegate(
 		return nil, err
 	}
 
+	// calculate gas used in the Cosmos transaction
+
 	initialGas := ctx.GasMeter().GasConsumed()
 
+	// set the default SDK gas configuration to track gas usage
 	ctx = ctx.WithKVGasConfig(storetypes.KVGasConfig()).
 		WithKVGasConfig(storetypes.TransientGasConfig())
 
@@ -220,6 +101,7 @@ func (sp *StakingPrecompile) Delegate(
 		return nil, vm.ErrOutOfGas
 	}
 
+	// commit the changes to state
 	writeFn()
 
 	return nil, nil
@@ -236,8 +118,13 @@ func (sp *StakingPrecompile) Undelegate(
 		return nil, vm.ErrWriteProtection
 	}
 
+	method, ok := sp.ABI.Methods[UndelegateMethod]
+	if !ok {
+		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
+	}
+
 	var undelegateInput UndelegateInput
-	err := precompiles.UnpackIntoInterface(&undelegateInput, UndelegateMethod.Inputs, argsBz)
+	err := precompiles.UnpackIntoInterface(&undelegateInput, method.Inputs, argsBz)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +144,7 @@ func (sp *StakingPrecompile) Undelegate(
 	}
 
 	output := new(UndelegateOutput).FromMessage(res)
-	bz, err := output.Pack(UndelegateMethod.Outputs)
+	bz, err := output.Pack(method.Outputs)
 	if err != nil {
 		return nil, err
 	}
