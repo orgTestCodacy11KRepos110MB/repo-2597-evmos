@@ -15,7 +15,7 @@ struct Validator {
   bool jailed;
   BondStatus status;
   uint256 tokens;
-  uint256 delegatorShares;
+  uint256 delegatorShares; // TODO: decimal
   string description;
   int64 unbondingHeight;
   uint64 unbondingTime;
@@ -23,9 +23,46 @@ struct Validator {
   uint256 minSelfDelegation;
 }
 
+struct RedelegationResponse {
+  Redelegation redelegation;
+  RedelegationEntryResponse[] entries;
+}
+
+struct Redelegation {
+  address delegatorAddress;
+  string validatorSrcAddress;
+  string validatorDstAddress;
+  RedelegationEntry[] entries;
+}
+
+struct RedelegationEntryResponse{
+  RedelegationEntry redelegationEntry;
+  uint256 balance;
+}
+
+struct RedelegationEntry {
+  int64 creationHeight;
+  uint64 completionTime;
+  uint256 initialBalance;
+  uint256 sharesDst; // TODO: decimal
+}
+
 struct Coin {
   string denom;
   uint256 amount;
+}
+
+struct PageRequest {
+  bytes key;
+  uint64 offset;
+  uint64 limit;
+  bool countTotal;
+  bool reverse;
+}
+
+struct PageResponse {
+  bytes nextKey;
+  uint64 total;
 }
 
 /// BondStatus is the status of the validator
@@ -123,5 +160,28 @@ interface StakingI {
       string memory validatorAddress
     ) external view returns (
       Validator calldata validator
+    );
+
+    /// @dev validators the given amount of the bond denomination to a validator.
+    /// @param status the address that we want to confirm is a delegator
+    /// @param pageRequest the address that we want to confirm is a delegator
+    function validators(
+      string memory status,
+      PageRequest calldata pageRequest
+    ) external view returns (
+      Validator[] calldata validators,
+      PageResponse calldata pageResponse
+    );
+
+    /// @dev validators the given amount of the bond denomination to a validator.
+    /// @param status the address that we want to confirm is a delegator
+    /// @param pageRequest the address that we want to confirm is a delegator
+    function validators(
+      address delegatorAddress,
+      string memory srcValidatorAddress,
+      string memory dstValidatorAddress,
+      PageRequest calldata pageRequest
+    ) external view returns (
+      RedelegationResponse calldata response
     );
 }

@@ -3,7 +3,7 @@ name: Solhint
 on:
   pull_request:
     paths:
-      - "contracts/**"
+      - "**/*.sol"
 
 jobs:
   solhint:
@@ -14,4 +14,4 @@ jobs:
       - uses: actions/setup-node@v3
       - run: npm install -g solhint
       - run: solhint --version
-      - run: solhint 'contracts/**/*.sol'
+      - run: solhint '/**/*.sol'

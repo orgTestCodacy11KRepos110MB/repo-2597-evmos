@@ -17,7 +17,6 @@
 package staking
 
 import (
-	"errors"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -35,9 +34,12 @@ const (
 	// UnbondingDelegationMethod defines the ABI method name for the staking
 	// UnbondingDelegationMethod query.
 	UnbondingDelegationMethod = "unbonding"
-	// Validator defines the ABI method name for the staking
+	// ValidatorMethod defines the ABI method name for the staking
 	// Validator query.
 	ValidatorMethod = "validator"
+	// ValidatorsMethod defines the ABI method name for the staking
+	// Validators query.
+	ValidatorsMethod = "validators"
 )
 
 func (sp *StakingPrecompile) Delegation(ctx sdk.Context,
@@ -116,15 +118,13 @@ func (sp *StakingPrecompile) Validator(ctx sdk.Context,
 		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
 	}
 
-	args, err := method.Inputs.Unpack(argsBz)
-	if err != nil {
-		return nil, errors.New("fail to unpack input arguments")
-	}
-
-	req, err := checkValidatorArgs(args)
+	var input ValidatorInput
+	err := precompiles.UnpackIntoInterface(&input, method.Inputs, argsBz)
 	if err != nil {
 		return nil, err
 	}
+
+	req := input.ToRequest()
 
 	queryServer := stakingkeeper.Querier{Keeper: sp.stakingKeeper}
 
@@ -133,15 +133,69 @@ func (sp *StakingPrecompile) Validator(ctx sdk.Context,
 		return nil, err
 	}
 
-	// TODO: define all args for response
-	// res.Validator.OperatorAddress
+	out := new(ValidatorOutput).FromResponse(res)
 
-	// TODO: convert to response
+	return out.Pack(method.Outputs)
+}
 
-	bz, err := method.Outputs.Pack(res)
+func (sp *StakingPrecompile) Validators(ctx sdk.Context,
+	contract *vm.Contract,
+	argsBz []byte,
+	stateDB *statedb.StateDB,
+	readOnly bool,
+) ([]byte, error) {
+	method, ok := sp.ABI.Methods[ValidatorsMethod]
+	if !ok {
+		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
+	}
+
+	var input ValidatorsInput
+	err := precompiles.UnpackIntoInterface(&input, method.Inputs, argsBz)
 	if err != nil {
 		return nil, err
 	}
 
-	return bz, nil
+	req := input.ToRequest()
+
+	queryServer := stakingkeeper.Querier{Keeper: sp.stakingKeeper}
+
+	res, err := queryServer.Validators(sdk.WrapSDKContext(ctx), req)
+	if err != nil {
+		return nil, err
+	}
+
+	out := new(ValidatorsOutput).FromResponse(res)
+
+	return out.Pack(method.Outputs)
+}
+
+func (sp *StakingPrecompile) Redelegations(ctx sdk.Context,
+	contract *vm.Contract,
+	argsBz []byte,
+	stateDB *statedb.StateDB,
+	readOnly bool,
+) ([]byte, error) {
+	method, ok := sp.ABI.Methods[RedelegationsMethod]
+	if !ok {
+		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
+	}
+
+	var input RedelegationsInput
+	err := precompiles.UnpackIntoInterface(&input, method.Inputs, argsBz)
+	if err != nil {
+		return nil, err
+	}
+
+	req := input.ToRequest()
+
+	queryServer := stakingkeeper.Querier{Keeper: sp.stakingKeeper}
+
+	res, err := queryServer.Redelegations(sdk.WrapSDKContext(ctx), req)
+	if err != nil {
+		return nil, err
+	}
+
+	out := new(RedelegationsOutput).FromResponse(res)
+
+	return out.Pack(method.Outputs)
 }

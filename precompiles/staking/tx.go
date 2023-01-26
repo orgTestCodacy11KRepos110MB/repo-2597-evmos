@@ -165,8 +165,13 @@ func (sp *StakingPrecompile) Redelegate(
 		return nil, vm.ErrWriteProtection
 	}
 
+	method, ok := sp.ABI.Methods[RedelegateMethod]
+	if !ok {
+		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
+	}
+
 	var redelegateInput RedelegateInput
-	err := precompiles.UnpackIntoInterface(&redelegateInput, RedelegateMethod.Inputs, argsBz)
+	err := precompiles.UnpackIntoInterface(&redelegateInput, method.Inputs, argsBz)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +191,7 @@ func (sp *StakingPrecompile) Redelegate(
 	}
 
 	output := new(RedelegateOutput).FromMessage(res)
-	bz, err := output.Pack(RedelegateMethod.Outputs)
+	bz, err := output.Pack(method.Outputs)
 	if err != nil {
 		return nil, err
 	}
@@ -207,8 +212,13 @@ func (sp *StakingPrecompile) CancelUnbondingDelegation(
 		return nil, vm.ErrWriteProtection
 	}
 
+	method, ok := sp.ABI.Methods[CancelUnbondingDelegationMethod]
+	if !ok {
+		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
+	}
+
 	var cancelUnbondingDelegationInput CancelUnbondingDelegationInput
-	err := precompiles.UnpackIntoInterface(&cancelUnbondingDelegationInput, CancelUnbondingDelegationMethod.Inputs, argsBz)
+	err := precompiles.UnpackIntoInterface(&cancelUnbondingDelegationInput, method.Inputs, argsBz)
 	if err != nil {
 		return nil, err
 	}
