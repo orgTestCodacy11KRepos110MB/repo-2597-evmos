@@ -17,6 +17,7 @@
 package staking
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -26,20 +27,25 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-type DelegateInput struct {
-	DelegatorAddress common.Address
-	ValidatorAddress string
-	Denom            string
-	Amount           *big.Int
-}
+func NewMsgDelegate(args []interface{}) (*stakingtypes.MsgDelegate, error) {
+	delegatorAddr, ok := args[0].(common.Address)
+	if !ok || delegatorAddr == (common.Address{}) {
+		return nil, fmt.Errorf("invalid delegator address")
+	}
 
-func (di DelegateInput) ToMessage() (*stakingtypes.MsgDelegate, error) {
+	validatorAddress, _ := args[1].(string)
+	denom, _ := args[2].(string)
+	amount, ok := args[3].(*big.Int)
+	if !ok {
+		return nil, fmt.Errorf("invalid amount")
+	}
+
 	msg := &stakingtypes.MsgDelegate{
-		DelegatorAddress: sdk.AccAddress(di.DelegatorAddress.Bytes()).String(),
-		ValidatorAddress: di.ValidatorAddress,
+		DelegatorAddress: sdk.AccAddress(delegatorAddr.Bytes()).String(),
+		ValidatorAddress: validatorAddress,
 		Amount: sdk.Coin{
-			Denom:  di.Denom,
-			Amount: sdk.NewIntFromBigInt(di.Amount),
+			Denom:  denom,
+			Amount: sdk.NewIntFromBigInt(amount),
 		},
 	}
 
@@ -57,13 +63,25 @@ type UndelegateInput struct {
 	Amount           *big.Int
 }
 
-func (ui UndelegateInput) ToMessage() (*stakingtypes.MsgUndelegate, error) {
+func NewMsgUndelegate(args []interface{}) (*stakingtypes.MsgUndelegate, error) {
+	delegatorAddr, ok := args[0].(common.Address)
+	if !ok || delegatorAddr == (common.Address{}) {
+		return nil, fmt.Errorf("invalid delegator address")
+	}
+
+	validatorAddress, _ := args[1].(string)
+	denom, _ := args[2].(string)
+	amount, ok := args[3].(*big.Int)
+	if !ok {
+		return nil, fmt.Errorf("invalid amount")
+	}
+
 	msg := &stakingtypes.MsgUndelegate{
-		DelegatorAddress: sdk.AccAddress(ui.DelegatorAddress.Bytes()).String(),
-		ValidatorAddress: ui.ValidatorAddress,
+		DelegatorAddress: sdk.AccAddress(delegatorAddr.Bytes()).String(),
+		ValidatorAddress: validatorAddress,
 		Amount: sdk.Coin{
-			Denom:  ui.Denom,
-			Amount: sdk.NewIntFromBigInt(ui.Amount),
+			Denom:  denom,
+			Amount: sdk.NewIntFromBigInt(amount),
 		},
 	}
 

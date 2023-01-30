@@ -17,7 +17,6 @@
 package staking
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -27,27 +26,26 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 
-	"github.com/evmos/ethermint/x/evm/statedb"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 )
 
 const abiPath = "./abi.json"
 
-var _ vm.PrecompiledContract = &StakingPrecompile{}
+// FIXME: fix on fork
+// var _ vm.PrecompiledContract = &Precompile{}
 
-// StakingPrecompile defines the precompiled contract for staking.
-type StakingPrecompile struct {
-	*abi.ABI
+// Precompile defines the precompiled contract for staking.
+type Precompile struct {
+	abi.ABI
 	stakingKeeper stakingkeeper.Keeper
 }
 
-// NewStakingPrecompile creates a new StakingPrecompile instance as a
+// NewPrecompile creates a new staking Precompile instance as a
 // PrecompiledContract interface.
-func NewStakingPrecompile(
+func NewPrecompile(
 	stakingKeeper stakingkeeper.Keeper,
-) (vm.PrecompiledContract, error) {
+) (*Precompile, error) {
 	abiJSON, err := ioutil.ReadFile(filepath.Clean(abiPath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open abi.json file: %w", err)
@@ -58,63 +56,91 @@ func NewStakingPrecompile(
 		return nil, fmt.Errorf("invalid abi.json file: %w", err)
 	}
 
-	return &StakingPrecompile{
+	return &Precompile{
 		ABI:           abi,
 		stakingKeeper: stakingKeeper,
-	}
+	}, nil
 }
 
 // Address defines the address of the staking compile contract.
 // address: 0x0000000000000000000000000000000000000100
-func (StakingPrecompile) Address() common.Address {
+func (Precompile) Address() common.Address {
 	return common.BytesToAddress([]byte{100})
 }
 
 // IsStateful returns true since the precompile contract has access to the
 // staking state.
-func (StakingPrecompile) IsStateful() bool {
+func (Precompile) IsStateful() bool {
 	return true
 }
 
 // RequiredGas calculates the contract gas use
-func (sp *StakingPrecompile) RequiredGas(input []byte) uint64 {
+func (*Precompile) RequiredGas(input []byte) uint64 {
 	return 0
 }
 
-// Run executes the data
-func (sp *StakingPrecompile) Run(evm *vm.EVM, contract *vm.Contract, input []byte, readOnly bool) ([]byte, error) {
-	stateDB, ok := evm.StateDB.(*statedb.StateDB)
-	if !ok {
-		return nil, errors.New("not run in ethermint")
-	}
+// Run executes the precompile contract staking methods defined in the ABI.
+func (p *Precompile) Run(evm *vm.EVM, contract *vm.Contract, input []byte, readOnly bool) ([]byte, error) {
+	// TODO:
+	// stateDB, ok := evm.StateDB.(*statedb.StateDB)
+	// if !ok {
+	// 	return nil, errors.New("not run in ethermint")
+	// }
 
 	// ctx := stateDB.GetContext()
 	ctx := sdk.Context{}
 
-	methodID := string(input[:4])
+	methodID := input[:4]
+
+	// NOTE: this function iterates over the method map and returns
+	// the method with the given ID
+	method, err := p.ABI.MethodById(methodID)
+	if err != nil {
+		return nil, err
+	}
+
+	// return error if trying to write to state during a read-only call
+	if readOnly && p.IsTransaction(method.Name) {
+		return nil, vm.ErrWriteProtection
+	}
+
 	argsBz := input[4:]
 
-	switch string(methodID) {
+	switch method.Name {
 	// Staking transactions
 	case DelegateMethod:
-		return sp.Delegate(ctx, contract, argsBz, stateDB, readOnly)
+		return p.Delegate(ctx, contract, method, argsBz)
 	case UndelegateMethod:
-		return sp.Undelegate(ctx, contract, argsBz, stateDB, readOnly)
+		return p.Undelegate(ctx, contract, method, argsBz)
 	case RedelegateMethod:
-		return sp.Redelegate(ctx, contract, argsBz, stateDB, readOnly)
+		return p.Redelegate(ctx, contract, method, argsBz)
 	case CancelUnbondingDelegationMethod:
-		return sp.CancelUnbondingDelegation(ctx, contract, argsBz, stateDB, readOnly)
+		return p.CancelUnbondingDelegation(ctx, contract, method, argsBz)
 		// Staking queries
 	case DelegationMethod:
-		return sp.Delegation(ctx, contract, argsBz, stateDB, readOnly)
+		return p.Delegation(ctx, contract, method, argsBz)
 	case UnbondingDelegationMethod:
-		return sp.UnbondingDelegation(ctx, contract, argsBz, stateDB, readOnly)
-	case ValidatorMethod:
-		return sp.Validator(ctx, contract, argsBz, stateDB, readOnly)
+		return p.UnbondingDelegation(ctx, contract, method, argsBz)
+	// case ValidatorMethod:
+	// 	return p.Validator(ctx, contract, argsBz, stateDB, readOnly)
+	// case RedelegationsMethod:
+	// 	return p.Redelegations(ctx, contract, argsBz, stateDB, readOnly)
 
 	// TODO: Add other queries
 	// TODO: how do we handle paginations?
 	default:
 		return nil, fmt.Errorf("no method with id: %#x", methodID)
+	}
+}
+
+func (Precompile) IsTransaction(methodID string) bool {
+	switch methodID {
+	case DelegateMethod,
+		UndelegateMethod,
+		RedelegateMethod,
+		CancelUnbondingDelegationMethod:
+		return true
+	default:
+		return false
 	}
 }

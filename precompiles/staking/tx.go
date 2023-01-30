@@ -17,16 +17,12 @@
 package staking
 
 import (
-	"fmt"
-
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/vm"
 
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
-
-	"github.com/evmos/ethermint/x/evm/statedb"
 
 	"github.com/evmos/evmos/v11/precompiles"
 )
@@ -47,37 +43,26 @@ const (
 )
 
 // Delegate performs the staking delegation.
-func (sp *StakingPrecompile) Delegate(
+func (p *Precompile) Delegate(
 	ctx sdk.Context,
 	contract *vm.Contract,
+	method *abi.Method,
 	argsBz []byte,
-	stateDB *statedb.StateDB,
-	readOnly bool,
 ) ([]byte, error) {
-	if readOnly {
-		return nil, vm.ErrWriteProtection
-	}
-
-	method, ok := sp.ABI.Methods[DelegateMethod]
-	if !ok {
-		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
-	}
-
-	var delegateInput DelegateInput
-	err := precompiles.UnpackIntoInterface(&delegateInput, method.Inputs, argsBz)
+	args, err := method.Inputs.Unpack(argsBz)
 	if err != nil {
 		return nil, err
 	}
 
-	// verify that the delegator is the contract caller
-	if delegateInput.DelegatorAddress != contract.Caller() {
-		return nil, sdkerrors.ErrUnauthorized
-	}
-
-	msg, err := delegateInput.ToMessage()
+	msg, err := NewMsgDelegate(args)
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: verify that the delegator is the contract caller
+	// if msg.DelegatorAddress != contract.Caller() {
+	// 	return nil, sdkerrors.ErrUnauthorized
+	// }
 
 	// calculate gas used in the Cosmos transaction
 
@@ -87,7 +72,7 @@ func (sp *StakingPrecompile) Delegate(
 	ctx = ctx.WithKVGasConfig(storetypes.KVGasConfig()).
 		WithKVGasConfig(storetypes.TransientGasConfig())
 
-	msgSrv := stakingkeeper.NewMsgServerImpl(sp.stakingKeeper)
+	msgSrv := stakingkeeper.NewMsgServerImpl(p.stakingKeeper)
 
 	cacheCtx, writeFn := ctx.CacheContext()
 
@@ -104,37 +89,26 @@ func (sp *StakingPrecompile) Delegate(
 	// commit the changes to state
 	writeFn()
 
-	return nil, nil
+	return []byte{}, nil
 }
 
-func (sp *StakingPrecompile) Undelegate(
+func (p *Precompile) Undelegate(
 	ctx sdk.Context,
 	contract *vm.Contract,
+	method *abi.Method,
 	argsBz []byte,
-	stateDB *statedb.StateDB,
-	readOnly bool,
 ) ([]byte, error) {
-	if readOnly {
-		return nil, vm.ErrWriteProtection
-	}
-
-	method, ok := sp.ABI.Methods[UndelegateMethod]
-	if !ok {
-		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
-	}
-
-	var undelegateInput UndelegateInput
-	err := precompiles.UnpackIntoInterface(&undelegateInput, method.Inputs, argsBz)
+	args, err := method.Inputs.Unpack(argsBz)
 	if err != nil {
 		return nil, err
 	}
 
-	msg, err := undelegateInput.ToMessage()
+	msg, err := NewMsgUndelegate(args)
 	if err != nil {
 		return nil, err
 	}
 
-	msgSrv := stakingkeeper.NewMsgServerImpl(sp.stakingKeeper)
+	msgSrv := stakingkeeper.NewMsgServerImpl(p.stakingKeeper)
 
 	cacheCtx, writeFn := ctx.CacheContext()
 
@@ -154,22 +128,12 @@ func (sp *StakingPrecompile) Undelegate(
 	return bz, nil
 }
 
-func (sp *StakingPrecompile) Redelegate(
+func (p *Precompile) Redelegate(
 	ctx sdk.Context,
 	contract *vm.Contract,
+	method *abi.Method,
 	argsBz []byte,
-	stateDB *statedb.StateDB,
-	readOnly bool,
 ) ([]byte, error) {
-	if readOnly {
-		return nil, vm.ErrWriteProtection
-	}
-
-	method, ok := sp.ABI.Methods[RedelegateMethod]
-	if !ok {
-		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
-	}
-
 	var redelegateInput RedelegateInput
 	err := precompiles.UnpackIntoInterface(&redelegateInput, method.Inputs, argsBz)
 	if err != nil {
@@ -181,7 +145,7 @@ func (sp *StakingPrecompile) Redelegate(
 		return nil, err
 	}
 
-	msgSrv := stakingkeeper.NewMsgServerImpl(sp.stakingKeeper)
+	msgSrv := stakingkeeper.NewMsgServerImpl(p.stakingKeeper)
 
 	cacheCtx, writeFn := ctx.CacheContext()
 
@@ -201,22 +165,12 @@ func (sp *StakingPrecompile) Redelegate(
 	return bz, nil
 }
 
-func (sp *StakingPrecompile) CancelUnbondingDelegation(
+func (p *Precompile) CancelUnbondingDelegation(
 	ctx sdk.Context,
 	contract *vm.Contract,
+	method *abi.Method,
 	argsBz []byte,
-	stateDB *statedb.StateDB,
-	readOnly bool,
 ) ([]byte, error) {
-	if readOnly {
-		return nil, vm.ErrWriteProtection
-	}
-
-	method, ok := sp.ABI.Methods[CancelUnbondingDelegationMethod]
-	if !ok {
-		return nil, fmt.Errorf("no method with id: %s", DelegationMethod)
-	}
-
 	var cancelUnbondingDelegationInput CancelUnbondingDelegationInput
 	err := precompiles.UnpackIntoInterface(&cancelUnbondingDelegationInput, method.Inputs, argsBz)
 	if err != nil {
@@ -228,7 +182,7 @@ func (sp *StakingPrecompile) CancelUnbondingDelegation(
 		return nil, err
 	}
 
-	msgSrv := stakingkeeper.NewMsgServerImpl(sp.stakingKeeper)
+	msgSrv := stakingkeeper.NewMsgServerImpl(p.stakingKeeper)
 
 	cacheCtx, writeFn := ctx.CacheContext()
 
