@@ -20,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/vm"
 
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 
@@ -66,36 +65,11 @@ func (p *Precompile) Delegate(
 
 	// calculate gas used in the Cosmos transaction
 
-	initialGas := ctx.GasMeter().GasConsumed()
-
-	// set the default SDK gas configuration to track gas usage
-	ctx = ctx.WithKVGasConfig(storetypes.KVGasConfig()).
-		WithKVGasConfig(storetypes.TransientGasConfig())
-
-	// reset the gas configuration after state transition
-	defer func() {
-		ctx = ctx.WithKVGasConfig(storetypes.GasConfig{}).
-			WithTransientKVGasConfig(storetypes.GasConfig{})
-	}()
-
 	msgSrv := stakingkeeper.NewMsgServerImpl(p.stakingKeeper)
 
-	// cache the context to avoid writing to state in case of failure or
-	// out of gas
-	cacheCtx, writeFn := ctx.CacheContext()
-
-	if _, err := msgSrv.Delegate(sdk.WrapSDKContext(cacheCtx), msg); err != nil {
+	if _, err := msgSrv.Delegate(sdk.WrapSDKContext(ctx), msg); err != nil {
 		return nil, err
 	}
-
-	cost := cacheCtx.GasMeter().GasConsumed() - initialGas
-
-	if !contract.UseGas(cost) {
-		return nil, vm.ErrOutOfGas
-	}
-
-	// commit the changes to state
-	writeFn()
 
 	return []byte{}, nil
 }

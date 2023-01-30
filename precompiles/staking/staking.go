@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 
+	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 )
@@ -80,7 +81,7 @@ func (*Precompile) RequiredGas(input []byte) uint64 {
 }
 
 // Run executes the precompile contract staking methods defined in the ABI.
-func (p *Precompile) Run(evm *vm.EVM, contract *vm.Contract, input []byte, readOnly bool) ([]byte, error) {
+func (p *Precompile) Run(evm *vm.EVM, contract *vm.Contract, readOnly bool) ([]byte, error) {
 	// TODO:
 	// stateDB, ok := evm.StateDB.(*statedb.StateDB)
 	// if !ok {
@@ -90,11 +91,11 @@ func (p *Precompile) Run(evm *vm.EVM, contract *vm.Contract, input []byte, readO
 	// ctx := stateDB.GetContext()
 	ctx := sdk.Context{}
 
-	methodID := input[:4]
+	methodID := contract.Input[:4]
 
 	// NOTE: this function iterates over the method map and returns
 	// the method with the given ID
-	method, err := p.ABI.MethodById(methodID)
+	method, err := p.MethodById(methodID)
 	if err != nil {
 		return nil, err
 	}
@@ -104,33 +105,65 @@ func (p *Precompile) Run(evm *vm.EVM, contract *vm.Contract, input []byte, readO
 		return nil, vm.ErrWriteProtection
 	}
 
-	argsBz := input[4:]
+	argsBz := contract.Input[4:]
 
+	initialGas := ctx.GasMeter().GasConsumed()
+
+	// set the default SDK gas configuration to track gas usage
+	ctx = ctx.WithKVGasConfig(storetypes.KVGasConfig()).
+		WithKVGasConfig(storetypes.TransientGasConfig())
+
+	// reset the gas configuration after state transition
+	defer func() {
+		ctx = ctx.WithKVGasConfig(storetypes.GasConfig{}).
+			WithTransientKVGasConfig(storetypes.GasConfig{})
+	}()
+
+	// cache the context to avoid writing to state in case of failure or
+	// out of gas
+	cacheCtx, writeFn := ctx.CacheContext()
+
+	var bz []byte
 	switch method.Name {
 	// Staking transactions
 	case DelegateMethod:
-		return p.Delegate(ctx, contract, method, argsBz)
+		bz, err = p.Delegate(cacheCtx, contract, method, argsBz)
 	case UndelegateMethod:
-		return p.Undelegate(ctx, contract, method, argsBz)
+		bz, err = p.Undelegate(cacheCtx, contract, method, argsBz)
 	case RedelegateMethod:
-		return p.Redelegate(ctx, contract, method, argsBz)
+		bz, err = p.Redelegate(cacheCtx, contract, method, argsBz)
 	case CancelUnbondingDelegationMethod:
-		return p.CancelUnbondingDelegation(ctx, contract, method, argsBz)
+		bz, err = p.CancelUnbondingDelegation(cacheCtx, contract, method, argsBz)
 		// Staking queries
 	case DelegationMethod:
-		return p.Delegation(ctx, contract, method, argsBz)
+		bz, err = p.Delegation(cacheCtx, contract, method, argsBz)
 	case UnbondingDelegationMethod:
-		return p.UnbondingDelegation(ctx, contract, method, argsBz)
+		bz, err = p.UnbondingDelegation(cacheCtx, contract, method, argsBz)
 	// case ValidatorMethod:
-	// 	return p.Validator(ctx, contract, argsBz, stateDB, readOnly)
+	// 	bz, err = p.Validator(cacheCtx, method, argsBz)
 	// case RedelegationsMethod:
-	// 	return p.Redelegations(ctx, contract, argsBz, stateDB, readOnly)
+	// 	bz, err = p.Redelegations(cacheCtx, method, argsBz)
 
 	// TODO: Add other queries
 	// TODO: how do we handle paginations?
 	default:
 		return nil, fmt.Errorf("no method with id: %#x", methodID)
 	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	cost := ctx.GasMeter().GasConsumed() - initialGas
+
+	if !contract.UseGas(cost) {
+		return nil, vm.ErrOutOfGas
+	}
+
+	// commit the changes to state
+	writeFn()
+
+	return bz, nil
 }
 
 func (Precompile) IsTransaction(methodID string) bool {
