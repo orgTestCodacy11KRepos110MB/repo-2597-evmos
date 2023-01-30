@@ -75,7 +75,7 @@ func (s *PrecompileTestSuite) TestDelegate() {
 			},
 			200,
 			big.NewInt(100),
-			false,
+			true,
 		},
 		{
 			"success",
@@ -100,15 +100,14 @@ func (s *PrecompileTestSuite) TestDelegate() {
 			argsBz := tc.argsFn()
 			contract := vm.NewContract(vm.AccountRef(s.address), s.precompile, big.NewInt(0), tc.gas)
 
-			// initialBonded := s.app.StakingKeeper.TotalBondedTokens(s.ctx)
 			s.ctx = s.ctx.WithGasMeter(sdk.NewInfiniteGasMeter())
 			initialGas := s.ctx.GasMeter().GasConsumed()
 			s.Require().Zero(initialGas)
 
 			bz, err := s.precompile.Delegate(s.ctx, contract, &method, argsBz)
-			delegation := s.app.StakingKeeper.Delegation(s.ctx, s.address[:], validatorAddr)
-			// bondAmt := s.app.StakingKeeper.TotalBondedTokens(s.ctx)
+			gasConsumed := s.ctx.GasMeter().GasConsumed()
 
+			delegation := s.app.StakingKeeper.Delegation(s.ctx, s.address[:], validatorAddr)
 			if tc.expError {
 				s.Require().Error(err)
 				s.Require().Empty(bz)
@@ -121,8 +120,7 @@ func (s *PrecompileTestSuite) TestDelegate() {
 			s.Require().Empty(bz)
 			s.Require().NotNil(delegation)
 			s.Require().Equal(delegationAmt, delegation.GetShares().TruncateInt())
-			// s.Require().Equal(initialBonded.Add(delegationAmt), bondAmt)
-			s.Require().Equal(int64(contract.Gas), int64(s.ctx.GasMeter().GasConsumed()))
+			s.Require().Equal(int64(tc.gas-contract.Gas), int64(gasConsumed), "gas consumed should be equal")
 		})
 	}
 }
