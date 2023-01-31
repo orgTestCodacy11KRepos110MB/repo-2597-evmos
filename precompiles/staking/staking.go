@@ -81,7 +81,7 @@ func (*Precompile) RequiredGas(input []byte) uint64 {
 }
 
 // Run executes the precompile contract staking methods defined in the ABI.
-func (p *Precompile) Run(evm *vm.EVM, contract *vm.Contract, readOnly bool) ([]byte, error) {
+func (p *Precompile) Run(evm *vm.EVM, contract *vm.Contract, readOnly bool) (bz []byte, err error) {
 	// TODO:
 	// stateDB, ok := evm.StateDB.(*statedb.StateDB)
 	// if !ok {
@@ -109,6 +109,20 @@ func (p *Precompile) Run(evm *vm.EVM, contract *vm.Contract, readOnly bool) ([]b
 
 	initialGas := ctx.GasMeter().GasConsumed()
 
+	defer func() {
+		if r := recover(); r != nil {
+			switch r.(type) {
+			case sdk.ErrorOutOfGas:
+				// update contract gas
+				_ = contract.UseGas(ctx.GasMeter().GasConsumed() - initialGas)
+
+				err = vm.ErrOutOfGas
+			default:
+				panic(r)
+			}
+		}
+	}()
+
 	// set the default SDK gas configuration to track gas usage
 	ctx = ctx.WithKVGasConfig(storetypes.KVGasConfig()).
 		WithKVGasConfig(storetypes.TransientGasConfig())
@@ -123,7 +137,6 @@ func (p *Precompile) Run(evm *vm.EVM, contract *vm.Contract, readOnly bool) ([]b
 	// out of gas
 	cacheCtx, writeFn := ctx.CacheContext()
 
-	var bz []byte
 	switch method.Name {
 	// Staking transactions
 	case DelegateMethod:
@@ -154,7 +167,7 @@ func (p *Precompile) Run(evm *vm.EVM, contract *vm.Contract, readOnly bool) ([]b
 		return nil, err
 	}
 
-	cost := ctx.GasMeter().GasConsumed() - initialGas
+	cost := cacheCtx.GasMeter().GasConsumed() - initialGas
 
 	if !contract.UseGas(cost) {
 		return nil, vm.ErrOutOfGas
