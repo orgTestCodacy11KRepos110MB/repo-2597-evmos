@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	cosmossdk.io/errors v1.0.0-beta.7
-	cosmossdk.io/math v1.0.0-beta.4
+	cosmossdk.io/math v1.0.0
 	github.com/armon/go-metrics v0.4.1
 	github.com/cosmos/cosmos-proto v1.0.0-beta.1
 	github.com/cosmos/cosmos-sdk v0.46.8
@@ -26,11 +26,11 @@ require (
 	github.com/rakyll/statik v0.1.7
 	github.com/spf13/cast v1.5.0
 	github.com/spf13/cobra v1.6.1
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	github.com/tendermint/tendermint v0.34.24
 	github.com/tendermint/tm-db v0.6.7
 	go.opencensus.io v0.24.0
-	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
+	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db
 	google.golang.org/genproto v0.0.0-20221118155620-16455021b5e6
 	google.golang.org/grpc v1.52.3
 	google.golang.org/protobuf v1.28.2-0.20220831092852-f930b1dc76e8
